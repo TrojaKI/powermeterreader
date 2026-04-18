@@ -1,0 +1,6 @@
+pyserial>=3.5
+cryptography>=41.0
+python-dotenv>=1.0
+paho-mqtt>=1.6
+influxdb-client>=1.40
+pytest>=8.0
