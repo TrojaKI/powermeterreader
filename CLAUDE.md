@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python tool to read and decode data from a **NÖ Netz Smart Meter P1 customer interface** (Kundenschnittstelle). The meter sends encrypted DLMS/COSEM frames every 5 seconds via wired M-Bus.
 
-In a later step implement a esp32 program.
+Two embedded implementations exist: ESP32/ESPHome (`esp32/`) and Arduino MKR WIFI 1010 (`arduino_mkr/`).
 
 ## Physical Interface
 
@@ -67,6 +67,57 @@ Timestamps are encoded as DLMS date-time octet strings (12 bytes including timez
 - Single-phase meters (Wechselstromzähler S210) only populate L1; L2/L3 will be 0
 - The decrypted payload is a DLMS `DataNotification` PDU — parse via the `NotificationBody > DataValue > Structure` path
 - Enum `0x1E` = Wh, `0x1B` = W, `0x23` = V, `0x21` = A, `0xFF` = dimensionless
+
+## Arduino MKR WIFI 1010 Implementation
+
+Location: `arduino_mkr/stromzaehler/`
+
+**Note:** Arduino MKR WIFI 1010 is **not** ESPHome-compatible. Uses pure Arduino framework with MQTT + HA auto-discovery.
+
+### Hardware
+
+| Component | Details |
+|-----------|---------|
+| Board | Arduino MKR WIFI 1010 (ATSAMD21G18A, 48 MHz, 3.3V logic) |
+| WiFi | u-blox NINA-W102 via `WiFiNINA` library |
+| M-Bus UART | `Serial1` at 2400 baud — TSS721A output → board **RX** pin |
+| Home Assistant | MQTT auto-discovery (discovery topics sent once per MQTT connect) |
+
+### Wiring (RJ12 → TSS721A → MKR WIFI 1010)
+
+| RJ12 Pin | Signal | Connection |
+|----------|--------|------------|
+| 3 | MBUS1 (+) | TSS721A MBUS+ |
+| 4 | MBUS2 (–) | TSS721A MBUS– |
+| — | TSS721A RX out | Board **RX** pin (Serial1) |
+| — | TSS721A GND | Board GND |
+| — | TSS721A VCC | Board 3.3V |
+
+### Required Libraries (Arduino Library Manager)
+
+| Library | Author | Version |
+|---------|--------|---------|
+| WiFiNINA | Arduino | 1.8.x |
+| PubSubClient | Nick O'Leary | 2.8.x |
+| Crypto | Rhys Weatherley | 0.4.x |
+| ArduinoOTA | Arduino | 1.0.x |
+
+### Credentials
+
+Copy `config.h.example` → `config.h`, fill in WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, GUEK_HEX, OTA_PASSWORD.
+`config.h` is in `.gitignore` — never commit it.
+
+### OTA Updates
+
+After first USB flash: Tools → Port → select network port `stromzaehler at <IP>` → Upload.
+OTA storage uses the NINA-W102 SPI flash (`WiFiStorage`) — **not** `InternalStorage` (SAMD21 has no dual-bank flash).
+
+### MQTT Topics
+
+| Topic | Retained | Content |
+|-------|----------|---------|
+| `homeassistant/sensor/stromzaehler_<field>/config` | yes | HA discovery payload (sent once on MQTT connect) |
+| `stromzaehler/<field>` | yes | Current sensor value (every 5 s) |
 
 ## Reference Tool
 

@@ -52,6 +52,43 @@ MQTT topics:
 pytest tests/ -v
 ```
 
+## Arduino MKR WIFI 1010
+
+Standalone embedded variant — runs 24/7 in the meter cabinet with direct Home Assistant integration, no PC required.
+
+### Hardware Required
+
+- Arduino MKR WIFI 1010
+- M-Bus Slave Module (TSS721A or compatible) — level-shifts 24V M-Bus to 3.3V UART
+- RJ12 cable (pin 3 = MBUS+, pin 4 = MBUS–)
+- USB-C 5V power supply
+
+### Setup
+
+1. Install [Arduino IDE 2.x](https://www.arduino.cc/en/software)
+2. Tools → Board Manager → search `Arduino SAMD` → install
+3. Install libraries (Tools → Manage Libraries):
+   `WiFiNINA`, `PubSubClient`, `Crypto` (by Rhys Weatherley), `ArduinoOTA`
+4. Copy config:
+   ```bash
+   cp arduino_mkr/stromzaehler/config.h.example arduino_mkr/stromzaehler/config.h
+   ```
+5. Edit `config.h` — set WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, GUEK_HEX (32 hex chars from Netz NÖ), OTA_PASSWORD
+6. Open `arduino_mkr/stromzaehler/stromzaehler.ino` in Arduino IDE
+7. Select board: Tools → Board → Arduino SAMD Boards → **Arduino MKR WIFI 1010**
+8. Upload via USB
+
+### Home Assistant
+
+Sensors appear automatically via MQTT discovery — no manual configuration needed.
+Requires MQTT integration enabled in HA with the broker address set in `config.h`.
+
+### OTA Updates
+
+After first USB flash, subsequent updates via WiFi:
+Tools → Port → select network port → Upload.
+Password: `OTA_PASSWORD` from `config.h`.
+
 ## Protocol
 
 NÖ Netz Smart Meter P1 interface (Kundenschnittstelle):
