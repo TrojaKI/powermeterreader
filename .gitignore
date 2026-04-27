@@ -1,5 +1,7 @@
 .env
 venv/
+esp32/secrets.yaml
+arduino_mkr/stromzaehler/config.h
 __pycache__/
 *.pyc
 *.pyo
