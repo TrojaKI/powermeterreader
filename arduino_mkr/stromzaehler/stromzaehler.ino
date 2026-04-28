@@ -1,11 +1,11 @@
 // arduino_mkr/stromzaehler/stromzaehler.ino
 // NÖ Netz Smart Meter reader — Arduino MKR WIFI 1010
+// TODO: OTA removed — WiFi101OTA conflicts with WiFiNINA; revisit later
 #include "config.h"
 #include "mbus.h"
 #include "dlms.h"
 #include "mqtt_ha.h"
 #include <WiFiNINA.h>
-#include <WiFi101OTA.h>
 
 static WiFiClient wifiClient;
 static MqttHa     mqttHa(wifiClient);
@@ -29,12 +29,10 @@ void setup() {
     Serial1.begin(2400, SERIAL_8E1);   // M-Bus: 2400 8E1 (required by M-Bus standard)
 
     wifi_connect();
-    ArduinoOTA.begin(WiFi.localIP(), "stromzaehler", OTA_PASSWORD, WiFiStorage);
     mqttHa.begin(MQTT_BROKER, MQTT_PORT, MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS);
 }
 
 void loop() {
-    ArduinoOTA.poll();
     wifi_connect();
     mqttHa.loop();
 
@@ -48,7 +46,7 @@ void loop() {
             MeterData data;
             if (dlms_parse(plain, plain_len, data)) {
                 mqttHa.publish(data);
-                Serial.print("P+: ");   Serial.print(data.power_active_w);
+                Serial.print("P+: ");    Serial.print(data.power_active_w);
                 Serial.print(" W  E: "); Serial.print(data.energy_consumed_wh);
                 Serial.print(" Wh  U1: "); Serial.print(data.voltage_l1, 1);
                 Serial.println(" V");
