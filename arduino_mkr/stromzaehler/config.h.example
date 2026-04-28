@@ -1,17 +1,6 @@
 // arduino_mkr/stromzaehler/config.h.example
-// Copy to config.h and fill in your values — never commit config.h
+// Copy to config.h — never commit config.h.
+// Credentials are read from ~/Arduino/libraries/configuration/Configuration.h
 #pragma once
 
-#define WIFI_SSID      "your_ssid"
-#define WIFI_PASSWORD  "your_wifi_password"
-
-#define MQTT_BROKER    "192.168.1.x"
-#define MQTT_PORT      1883
-#define MQTT_CLIENT_ID "stromzaehler"
-#define MQTT_USER      ""   // leave empty if broker has no auth
-#define MQTT_PASS      ""
-
-// 32 hex chars = 16 bytes AES-128 GUEK from Netz NÖ
-#define GUEK_HEX       "00000000000000000000000000000000"
-
-#define OTA_PASSWORD   "your_ota_password"
+#include <Configuration.h>
