@@ -5,7 +5,7 @@
 #include "dlms.h"
 #include "mqtt_ha.h"
 #include <WiFiNINA.h>
-#include <ArduinoOTA.h>
+#include <WiFi101OTA.h>
 
 static WiFiClient wifiClient;
 static MqttHa     mqttHa(wifiClient);
