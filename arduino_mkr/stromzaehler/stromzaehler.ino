@@ -13,7 +13,7 @@ static MqttHa     mqttHa(wifiClient);
 static void wifi_connect() {
     if (WiFi.status() == WL_CONNECTED) return;
     Serial.print("WiFi connecting");
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.begin(wifi_ssid(), wifi_pass());
     for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
         delay(500); Serial.print(".");
     }

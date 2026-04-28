@@ -1,6 +1,19 @@
 // arduino_mkr/stromzaehler/config.h.example
 // Copy to config.h — never commit config.h.
-// Credentials are read from ~/Arduino/libraries/configuration/Configuration.h
+// Credentials come from ~/Arduino/libraries/configuration/Configuration.h
 #pragma once
 
 #include <Configuration.h>
+
+// Configuration.h uses Arduino String objects for WiFi — wrap for const char* APIs
+inline const char* wifi_ssid() { return s_ssid.c_str(); }
+inline const char* wifi_pass() { return s_password.c_str(); }
+
+// Configuration.h uses mqttServer/mqttPort — aliases for clarity
+#define MQTT_BROKER mqttServer
+#define MQTT_PORT   mqttPort
+
+// Project-specific — not in Configuration.h
+#define MQTT_CLIENT_ID "stromzaehler"
+#define MQTT_USER      ""
+#define MQTT_PASS      ""
