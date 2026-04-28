@@ -79,19 +79,21 @@ Location: `arduino_mkr/stromzaehler/`
 | Component | Details |
 |-----------|---------|
 | Board | Arduino MKR WIFI 1010 (ATSAMD21G18A, 48 MHz, 3.3V logic) |
+| M-Bus Interface | Arduino MKR MBUS Slave Shield (HW Hardsoft, TSS721A, galv. isoliert) |
 | WiFi | u-blox NINA-W102 via `WiFiNINA` library |
-| M-Bus UART | `Serial1` at 2400 baud — TSS721A output → board **RX** pin |
+| M-Bus UART | `Serial1` at **2400 baud, 8E1** (M-Bus standard: even parity required) |
 | Home Assistant | MQTT auto-discovery (discovery topics sent once per MQTT connect) |
 
-### Wiring (RJ12 → TSS721A → MKR WIFI 1010)
+### Wiring (RJ12 → MKR MBUS Slave Shield)
 
-| RJ12 Pin | Signal | Connection |
-|----------|--------|------------|
-| 3 | MBUS1 (+) | TSS721A MBUS+ |
-| 4 | MBUS2 (–) | TSS721A MBUS– |
-| — | TSS721A RX out | Board **RX** pin (Serial1) |
-| — | TSS721A GND | Board GND |
-| — | TSS721A VCC | Board 3.3V |
+Shield steckt direkt auf den MKR WIFI 1010 — keine manuelle Verdrahtung zum SAMD21 nötig.
+
+| RJ12 Pin | Signal | Shield-Anschluss |
+|----------|--------|-----------------|
+| 3 | MBUS1 (+) | Shield M-Bus Schraubklemme + |
+| 4 | MBUS2 (–) | Shield M-Bus Schraubklemme – |
+
+Shield-Versorgung: wird vom M-Bus-Bus (Stromzähler, 24–36 V) gespeist — kein separates Netzteil nötig. MKR WIFI 1010 separat via USB-C (5 V).
 
 ### Required Libraries (Arduino Library Manager)
 

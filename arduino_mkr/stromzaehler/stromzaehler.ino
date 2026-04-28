@@ -25,8 +25,8 @@ static void wifi_connect() {
 }
 
 void setup() {
-    Serial.begin(115200);  // USB debug
-    Serial1.begin(2400);   // M-Bus RX — connect TSS721A output to board RX pin
+    Serial.begin(115200);              // USB debug
+    Serial1.begin(2400, SERIAL_8E1);   // M-Bus: 2400 8E1 (required by M-Bus standard)
 
     wifi_connect();
     ArduinoOTA.begin(WiFi.localIP(), "stromzaehler", OTA_PASSWORD, WiFiStorage);

@@ -59,9 +59,9 @@ Standalone embedded variant — runs 24/7 in the meter cabinet with direct Home 
 ### Hardware Required
 
 - Arduino MKR WIFI 1010
-- M-Bus Slave Module (TSS721A or compatible) — level-shifts 24V M-Bus to 3.3V UART
-- RJ12 cable (pin 3 = MBUS+, pin 4 = MBUS–)
-- USB-C 5V power supply
+- [Arduino MKR MBUS Slave Shield](https://www.hwhardsoft.de/deutsch/projekte/m-bus-mkr-shield/) (HW Hardsoft) — steckt direkt auf den MKR, TSS721A galvanisch isoliert
+- RJ12 cable (pin 3 = MBUS+, pin 4 = MBUS–) → Shield M-Bus screw terminals
+- USB-C 5V power supply for the MKR (shield is powered from the M-Bus line)
 
 ### Setup
 
