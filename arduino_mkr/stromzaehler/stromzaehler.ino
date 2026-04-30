@@ -1,14 +1,15 @@
 // arduino_mkr/stromzaehler/stromzaehler.ino
 // NÖ Netz Smart Meter reader — Arduino MKR WIFI 1010
-// TODO: OTA removed — WiFi101OTA conflicts with WiFiNINA; revisit later
 #include "config.h"
 #include "mbus.h"
 #include "dlms.h"
 #include "mqtt_ha.h"
+#include "web.h"
 #include <WiFiNINA.h>
 
 static WiFiClient wifiClient;
 static MqttHa     mqttHa(wifiClient);
+static WebServer  webServer;
 
 static void wifi_connect() {
     if (WiFi.status() == WL_CONNECTED) return;
@@ -25,18 +26,22 @@ static void wifi_connect() {
 }
 
 void setup() {
-    Serial.begin(115200);              // USB debug
-    Serial1.begin(2400, SERIAL_8E1);   // M-Bus: 2400 8E1 (required by M-Bus standard)
+    Serial.begin(115200);
+    Serial1.begin(2400, SERIAL_8E1);  // M-Bus: even parity required
 
     wifi_connect();
     mqttHa.begin(MQTT_BROKER, MQTT_PORT, MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS);
+    webServer.begin();
+    Serial.print("Web: http://"); Serial.println(WiFi.localIP());
 }
 
 void loop() {
     wifi_connect();
     mqttHa.loop();
 
-    static uint8_t plain[400];
+    static MeterData last_data{};
+    static uint8_t   plain[400];
+
     while (Serial1.available()) {
         uint8_t b = (uint8_t)Serial1.read();
         if (!mbus_process_byte(b)) continue;
@@ -45,6 +50,7 @@ void loop() {
         if (dlms_decrypt(mbus_frame(), mbus_frame_len(), GUEK_HEX, plain, plain_len)) {
             MeterData data;
             if (dlms_parse(plain, plain_len, data)) {
+                last_data = data;
                 mqttHa.publish(data);
                 Serial.print("P+: ");    Serial.print(data.power_active_w);
                 Serial.print(" W  E: "); Serial.print(data.energy_consumed_wh);
@@ -54,4 +60,6 @@ void loop() {
         }
         mbus_reset();
     }
+
+    webServer.handle(last_data);
 }
