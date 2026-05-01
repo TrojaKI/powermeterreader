@@ -1,0 +1,70 @@
+esphome:
+  name: stromzaehler
+  friendly_name: "NÖ Netz Stromzähler"
+
+esp32:
+  board: esp32dev  # change to esp32s3dev for S3 boards
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: external_components
+
+logger:
+  level: INFO
+
+api:
+  encryption:
+    key: !secret ha_api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  ap:
+    ssid: "Stromzaehler Fallback"
+    password: !secret ap_password
+
+captive_portal:
+
+uart:
+  id: mbus_uart
+  rx_pin: GPIO16
+  baud_rate: 2400
+  rx_buffer_size: 512
+  # tx_pin not needed — meter sends only
+
+stromzaehler:
+  uart_id: mbus_uart
+  guek: !secret guek
+
+  energy_consumed:
+    name: "Energie Bezug"
+  energy_fed:
+    name: "Energie Einspeisung"
+  power_active:
+    name: "Leistung Bezug"
+  power_reactive:
+    name: "Leistung Einspeisung"
+  voltage_l1:
+    name: "Spannung L1"
+  voltage_l2:
+    name: "Spannung L2"
+  voltage_l3:
+    name: "Spannung L3"
+  current_l1:
+    name: "Strom L1"
+  current_l2:
+    name: "Strom L2"
+  current_l3:
+    name: "Strom L3"
+  power_factor:
+    name: "Leistungsfaktor"
+  meter_serial:
+    name: "Zählernummer"
