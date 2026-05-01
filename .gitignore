@@ -11,3 +11,9 @@ dist/
 build/
 arduino_mkr/.pio/
 arduino_mkr/*.out
+arduino_mkr/.vscode/
+arduino_mkr/.vscode/.browse.c_cpp.db*
+arduino_mkr/.vscode/c_cpp_properties.json
+arduino_mkr/.vscode/launch.json
+arduino_mkr/.vscode/ipch
+resume.txt
