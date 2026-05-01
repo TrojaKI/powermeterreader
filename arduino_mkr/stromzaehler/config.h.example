@@ -17,3 +17,6 @@ inline const char* wifi_pass() { return s_password.c_str(); }
 #define MQTT_CLIENT_ID "stromzaehler"
 #define MQTT_USER      ""
 #define MQTT_PASS      ""
+
+// Publish interval — MQTT data + debug hex are sent at most once per interval
+#define PUBLISH_INTERVAL_MS 30000

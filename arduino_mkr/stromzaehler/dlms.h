@@ -18,9 +18,11 @@ struct MeterData {
     char     meter_serial[32];
 };
 
-// guek_hex: 32 hex chars (16 bytes AES-128 GUEK)
-// plain_out must be at least 400 bytes
-bool dlms_decrypt(const uint8_t *frame, size_t frame_len,
+// Sagemcom T210D / NÖ Netz: DLMS PDU spans two M-Bus frames.
+// frame1: 256B main frame, frame2: 26B continuation (NULL = single-frame mode)
+// plain_out must be at least 256 bytes
+bool dlms_decrypt(const uint8_t *frame1, size_t frame1_len,
+                  const uint8_t *frame2, size_t frame2_len,
                   const char *guek_hex,
                   uint8_t *plain_out, size_t &plain_len);
 

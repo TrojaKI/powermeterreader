@@ -1,5 +1,6 @@
 // arduino_mkr/stromzaehler/mqtt_ha.cpp
 #include "mqtt_ha.h"
+#include "version.h"
 #include <stdio.h>
 
 MqttHa::MqttHa(WiFiClient &wc) : _client(wc) {}
@@ -8,7 +9,7 @@ void MqttHa::begin(const char *broker, uint16_t port, const char *cid,
                    const char *user, const char *pass) {
     _broker = broker; _port = port; _cid = cid; _user = user; _pass = pass;
     _client.setServer(_broker, _port);
-    _client.setBufferSize(512);  // discovery payloads can be ~300 bytes
+    _client.setBufferSize(600);  // plain hex dump: 243B × 2 = 486 chars
 }
 
 void MqttHa::loop() {
@@ -50,14 +51,15 @@ static void disc_sensor(PubSubClient &c, const char *field, const char *name,
          "\"unique_id\":\"smkr_%s\","
          "\"device\":{\"identifiers\":[\"stromzaehler_mkr\"],"
                      "\"name\":\"N\\u00d6 Netz Stromz\\u00e4hler\","
-                     "\"model\":\"Arduino MKR WIFI 1010\"}}",
+                     "\"model\":\"Arduino MKR WIFI 1010\","
+                     "\"sw_version\":\"" FW_VERSION "\"}}",
         name, field, unit, dev_class, state_class, decimals, field);
     c.publish(topic, payload, true);
 }
 
 void MqttHa::send_discovery() {
-    disc_sensor(_client, "energy_consumed_wh", "Energie Bezug",      "Wh","energy",       "total_increasing", 0);
-    disc_sensor(_client, "energy_fed_wh",      "Energie Einspeisung","Wh","energy",       "total_increasing", 0);
+    disc_sensor(_client, "energy_consumed_wh", "Energie Bezug",      "kWh","energy",       "total_increasing", 3);
+    disc_sensor(_client, "energy_fed_wh",      "Energie Einspeisung","kWh","energy",       "total_increasing", 3);
     disc_sensor(_client, "power_active_w",     "Leistung Bezug",     "W", "power",        "measurement",      0);
     disc_sensor(_client, "power_reactive_w",   "Leistung Einsp.",    "W", "power",        "measurement",      0);
     disc_sensor(_client, "voltage_l1",         "Spannung L1",        "V", "voltage",      "measurement",      1);
@@ -77,7 +79,8 @@ void MqttHa::send_discovery() {
          "\"unique_id\":\"smkr_meter_serial\","
          "\"device\":{\"identifiers\":[\"stromzaehler_mkr\"],"
                      "\"name\":\"N\\u00d6 Netz Stromz\\u00e4hler\","
-                     "\"model\":\"Arduino MKR WIFI 1010\"}}",
+                     "\"model\":\"Arduino MKR WIFI 1010\","
+                     "\"sw_version\":\"" FW_VERSION "\"}}",
         true);
 }
 
@@ -89,8 +92,8 @@ void MqttHa::publish(const MeterData &d) {
         snprintf(buf, sizeof(buf), fmt, val); \
         _client.publish("stromzaehler/" field, buf, true);
 
-    PUB("energy_consumed_wh", "%lu", (unsigned long)d.energy_consumed_wh)
-    PUB("energy_fed_wh",      "%lu", (unsigned long)d.energy_fed_wh)
+    PUB("energy_consumed_wh", "%.3f", (float)d.energy_consumed_wh / 1000.0f)
+    PUB("energy_fed_wh",      "%.3f", (float)d.energy_fed_wh       / 1000.0f)
     PUB("power_active_w",     "%lu", (unsigned long)d.power_active_w)
     PUB("power_reactive_w",   "%lu", (unsigned long)d.power_reactive_w)
     PUB("voltage_l1",  "%.1f", d.voltage_l1)
@@ -104,4 +107,21 @@ void MqttHa::publish(const MeterData &d) {
 
     if (d.meter_serial[0] != '\0')
         _client.publish("stromzaehler/meter_serial", d.meter_serial, true);
+}
+
+void MqttHa::publish_debug(const char *msg) {
+    if (!_client.connected()) return;
+    _client.publish("stromzaehler/debug", msg, false);
+}
+
+void MqttHa::publish_hex(const char *subtopic, const uint8_t *data, size_t len) {
+    if (!_client.connected()) return;
+    static const char H[] = "0123456789ABCDEF";
+    static char hex[490];
+    size_t n = len < 244 ? len : 243;
+    for (size_t i = 0; i < n; i++) { hex[i*2]=H[data[i]>>4]; hex[i*2+1]=H[data[i]&0xF]; }
+    hex[n*2] = '\0';
+    char topic[48];
+    snprintf(topic, sizeof(topic), "stromzaehler/%s", subtopic);
+    _client.publish(topic, hex, false);
 }

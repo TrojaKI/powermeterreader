@@ -1,5 +1,6 @@
 // arduino_mkr/stromzaehler/web.cpp
 #include "web.h"
+#include "version.h"
 #include <WiFiStorage.h>
 #include <stdio.h>
 #include <string.h>
@@ -68,12 +69,13 @@ void WebServer::serve_status(WiFiClient &c) {
     c.print(
         "<!DOCTYPE html><html><head>"
         "<meta charset='utf-8'>"
-        "<meta http-equiv='refresh' content='5'>"
+        "<meta http-equiv='refresh' content='30'>"
         "<title>Stromz\xC3\xA4hler</title>"
-        "<style>body{font-family:sans-serif;max-width:500px;margin:2em auto}"
+        "<style>body{font-family:sans-serif;max-width:520px;margin:2em auto}"
         "table{border-collapse:collapse;width:100%}"
         "td,th{padding:6px 12px;border:1px solid #ccc;text-align:right}"
         "th{background:#f0f0f0;text-align:left}"
+        "th small{display:block;font-weight:normal;color:#888;font-size:0.8em}"
         "a{display:inline-block;margin-top:1em;padding:6px 12px;"
         "background:#0078d4;color:#fff;text-decoration:none;border-radius:4px}"
         "</style></head><body>"
@@ -81,28 +83,31 @@ void WebServer::serve_status(WiFiClient &c) {
         "<table>"
     );
 
-    #define ROW(label, fmt, val, unit) \
+    #define ROW(obis, label, fmt, val, unit) \
         { char _b[24]; snprintf(_b, sizeof(_b), fmt, val); \
           c.print("<tr><th>"); c.print(label); \
+          c.print("<small>"); c.print(obis); c.print("</small>"); \
           c.print("</th><td>"); c.print(_b); \
           c.print(" " unit "</td></tr>"); }
 
-    ROW("Energie Bezug",   "%lu",  (unsigned long)_last.energy_consumed_wh, "Wh")
-    ROW("Energie Einsp.",  "%lu",  (unsigned long)_last.energy_fed_wh,      "Wh")
-    ROW("Leistung Bezug",  "%lu",  (unsigned long)_last.power_active_w,     "W")
-    ROW("Leistung Einsp.", "%lu",  (unsigned long)_last.power_reactive_w,   "W")
-    ROW("Spannung L1",     "%.1f", _last.voltage_l1,  "V")
-    ROW("Spannung L2",     "%.1f", _last.voltage_l2,  "V")
-    ROW("Spannung L3",     "%.1f", _last.voltage_l3,  "V")
-    ROW("Strom L1",        "%.2f", _last.current_l1,  "A")
-    ROW("Strom L2",        "%.2f", _last.current_l2,  "A")
-    ROW("Strom L3",        "%.2f", _last.current_l3,  "A")
-    ROW("Leistungsfaktor", "%.3f", _last.power_factor, "")
+    ROW("1.8.0",  "Energie Bezug",   "%.3f", _last.energy_consumed_wh / 1000.0f, "kWh")
+    ROW("2.8.0",  "Energie Einsp.",  "%.3f", _last.energy_fed_wh       / 1000.0f, "kWh")
+    ROW("1.7.0",  "Leistung Bezug",  "%lu",  (unsigned long)_last.power_active_w,     "W")
+    ROW("2.7.0",  "Leistung Einsp.", "%lu",  (unsigned long)_last.power_reactive_w,   "W")
+    ROW("32.7.0", "Spannung L1",     "%.1f", _last.voltage_l1,  "V")
+    ROW("52.7.0", "Spannung L2",     "%.1f", _last.voltage_l2,  "V")
+    ROW("72.7.0", "Spannung L3",     "%.1f", _last.voltage_l3,  "V")
+    ROW("31.7.0", "Strom L1",        "%.2f", _last.current_l1,  "A")
+    ROW("51.7.0", "Strom L2",        "%.2f", _last.current_l2,  "A")
+    ROW("71.7.0", "Strom L3",        "%.2f", _last.current_l3,  "A")
+    ROW("13.7.0", "Leistungsfaktor", "%.3f", _last.power_factor, "")
     #undef ROW
 
     c.print("<tr><th>Z\xC3\xA4hlernummer</th><td>");
     c.print(_last.meter_serial[0] ? _last.meter_serial : "-");
     c.print("</td></tr></table>");
+    c.print("<p style='color:#888;font-size:0.85em;margin-top:0.5em'>"
+            "Firmware " FW_VERSION "</p>");
     c.print("<a href='/update'>Firmware Update</a>");
     c.print("</body></html>");
 }

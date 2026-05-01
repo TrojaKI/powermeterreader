@@ -11,6 +11,8 @@ class MqttHa {
                const char *user = "", const char *pass = "");
     void loop();                  // call every loop() iteration
     void publish(const MeterData &d);
+    void publish_debug(const char *msg);  // → stromzaehler/debug (not retained)
+    void publish_hex(const char *subtopic, const uint8_t *data, size_t len);  // → stromzaehler/<subtopic>
 
  private:
     void reconnect();
