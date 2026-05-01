@@ -9,3 +9,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+arduino_mkr/.pio/
+arduino_mkr/log.out
+arduino_mkr/log2.out
