@@ -46,7 +46,7 @@ def parse_datetime(data: bytes) -> datetime | None:
         if tz_raw == -32768:
             tz = timezone.utc
         else:
-            tz = timezone(timedelta(minutes=tz_raw))
+            tz = timezone(timedelta(minutes=-tz_raw))  # Sagemcom encodes sign inverted
         return datetime(year, month, day, hour, minute, second, tzinfo=tz)
     except (ValueError, OverflowError):
         return None
