@@ -1,6 +1,5 @@
 // arduino_mkr/stromzaehler/stromzaehler.ino
 // NÖ Netz Smart Meter reader — Arduino MKR WIFI 1010 + Sagemcom T210D
-#include <SFU.h>    // MUST be first — embeds SFU second-stage bootloader for NINA OTA
 #include "config.h"
 #include "version.h"
 #include "mbus.h"
@@ -15,7 +14,11 @@ static WebServer  webServer;
 
 static void wifi_connect() {
     if (WiFi.status() == WL_CONNECTED) return;
-    Serial.print("WiFi connecting");
+    if (WiFi.status() == WL_NO_MODULE) {
+        Serial.println("WiFi module not responding — NINA SPI failure");
+        return;
+    }
+    Serial.print("WiFi connecting to: "); Serial.println(wifi_ssid());
     WiFi.begin(wifi_ssid(), wifi_pass());
     for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
         delay(500); Serial.print(".");
@@ -23,7 +26,8 @@ static void wifi_connect() {
     if (WiFi.status() == WL_CONNECTED) {
         Serial.print("\nIP: "); Serial.println(WiFi.localIP());
     } else {
-        Serial.println("\nWiFi failed — will retry in loop");
+        // 1=NO_SSID 3=CONNECTED 4=CONNECT_FAILED 6=DISCONNECTED 7=AP_SCAN
+        Serial.print("\nWiFi failed — status="); Serial.println(WiFi.status());
     }
 }
 
