@@ -123,8 +123,14 @@ def format_scaled(raw: int, scaler: int, unit: str) -> tuple[str, str]:
 
 def decode_apdu(data: bytes) -> None:
     """Parse and print the DLMS DataNotification APDU."""
-    bar = "━" * 54
-    thin = "─" * 54
+    # Column widths
+    W_OBIS, W_DESC, W_VAL, W_UNIT = 16, 22, 12, 5
+    # Header row — measure actual width to size separator lines
+    header = (f"{'OBIS Code':<{W_OBIS}}  {'Beschreibung':<{W_DESC}}"
+              f"  {'Wert':>{W_VAL}}  {'Einheit':<{W_UNIT}}  Skalierung")
+    WIDTH = len(header)
+    bar  = "━" * WIDTH
+    thin = "─" * WIDTH
 
     print(bar)
 
@@ -143,22 +149,25 @@ def decode_apdu(data: bytes) -> None:
     print(f"{len(data)} Bytes Plaintext  (invoke-id: 0x{invoke_id:08X})")
     print(bar)
 
-    print(f"{'OBIS Code':<18} {'Beschreibung':<22} {'Wert':>12}  {'Einheit':<5}  Skalierung")
+    print(header)
     print(thin)
 
     for obis_bytes, obis_str, description in OBIS_MAP:
         raw, scaler, unit_enum = find_obis_entry(data, obis_bytes)
         unit_name = UNIT_NAMES.get(unit_enum, f"0x{unit_enum:02X}")
         if raw is None:
-            print(f"{obis_str:<18} {description:<22} {'—':>12}  {unit_name:<5}")
+            print(f"{obis_str:<{W_OBIS}}  {description:<{W_DESC}}  {'—':>{W_VAL}}  {unit_name:<{W_UNIT}}")
         else:
             val_str, annotation = format_scaled(raw, scaler, unit_name)
-            print(f"{obis_str:<18} {description:<22} {val_str:>12}  {unit_name:<5}  {annotation}")
+            print(f"{obis_str:<{W_OBIS}}  {description:<{W_DESC}}"
+                  f"  {val_str:>{W_VAL}}  {unit_name:<{W_UNIT}}  {annotation}")
 
     serial = parse_meter_serial(data)
     if serial:
         print(thin)
-        print(f"{'Zählernummer:':<42} {serial}")
+        # label fills OBIS+DESC columns; serial right-aligns in value column
+        label_w = W_OBIS + 2 + W_DESC
+        print(f"{'Zählernummer:':<{label_w}}  {serial:>{W_VAL}}")
 
     print(bar)
 
