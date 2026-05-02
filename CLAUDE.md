@@ -109,6 +109,9 @@ Shield-Versorgung: wird vom M-Bus-Bus (Stromzähler, 24–36 V) gespeist — kei
 Copy `config.h.example` → `config.h`, fill in WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, GUEK_HEX, OTA_PASSWORD.
 `config.h` is in `.gitignore` — never commit it.
 
+### Compiling
+- binary path: /home/peter/.platformio/penv/bin/pio
+
 ### OTA Updates
 
 After first USB flash: Tools → Port → select network port `stromzaehler at <IP>` → Upload.
