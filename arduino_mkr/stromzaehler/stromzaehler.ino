@@ -1,5 +1,6 @@
 // arduino_mkr/stromzaehler/stromzaehler.ino
 // NÖ Netz Smart Meter reader — Arduino MKR WIFI 1010 + Sagemcom T210D
+#include <SFU.h>    // MUST be first — embeds SFU second-stage bootloader for NINA OTA
 #include "config.h"
 #include "version.h"
 #include "mbus.h"
