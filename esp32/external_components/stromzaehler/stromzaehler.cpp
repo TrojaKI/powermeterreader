@@ -46,19 +46,30 @@ void StromzaehlerComponent::loop() {
     while (available()) {
         uint8_t byte;
         read_byte(&byte);
-        if (process_byte(byte)) {
-            // Full frame in buf_[0..buf_len_-1]
+        if (!process_byte(byte)) continue;
+
+        if (buf_len_ == 256) {
+            // Sagemcom T210D frame1 — buffer and wait for frame2
+            memcpy(frame1_buf_, buf_, buf_len_);
+            frame1_len_ = buf_len_;
+            has_frame1_ = true;
+        } else if (buf_len_ == 26 && has_frame1_) {
+            // frame2 arrived — decrypt combined
+            has_frame1_ = false;
             uint8_t plain[FRAME_BUFFER_SIZE];
             size_t plain_len = 0;
-            if (decrypt(buf_, buf_len_, plain, &plain_len)) {
+            if (decrypt(frame1_buf_, frame1_len_, buf_, buf_len_, plain, &plain_len)) {
                 MeterData data;
                 if (parse(plain, plain_len, data)) {
                     publish_data(data);
                 }
             }
-            buf_len_ = 0;
-            synced_ = false;
+        } else {
+            has_frame1_ = false;
+            ESP_LOGW(TAG, "Unexpected frame size %zu — dropping", buf_len_);
         }
+        buf_len_ = 0;
+        synced_ = false;
     }
 }
 
@@ -108,107 +119,61 @@ bool StromzaehlerComponent::process_byte(uint8_t byte) {
     return false;
 }
 
-bool StromzaehlerComponent::decrypt(const uint8_t *frame, size_t frame_len,
+bool StromzaehlerComponent::decrypt(const uint8_t *f1, size_t f1_len,
+                                    const uint8_t *f2, size_t f2_len,
                                     uint8_t *plain_out, size_t *plain_len) {
-    // payload = frame[6 .. frame_len-3]  (skip header + CS + stop)
-    if (frame_len < 12) return false;
-    const uint8_t *payload = frame + 6;
-    size_t payload_len = frame_len - 8;  // -6 header, -2 (CS+stop)
+    // Fixed offsets for Sagemcom T210D / NÖ Netz (validated vs arduino_mkr reference)
+    static const size_t OFF_CI        =  9;
+    static const size_t OFF_SYS_TITLE = 11;
+    static const size_t OFF_INV_CTR   = 22;
+    static const size_t OFF_CIPHER_F1 = 26;
+    static const size_t OFF_CIPHER_F2 =  9;
 
-    if (payload[0] != CI_GENERAL_CIPHERING) {
-        ESP_LOGW(TAG, "Expected CI=0xDB, got 0x%02x", payload[0]);
+    if (f1_len < OFF_CIPHER_F1 + 2) {
+        ESP_LOGW(TAG, "Frame1 too short: %zu", f1_len);
         return false;
     }
-    if (payload[1] != 8) {
-        ESP_LOGW(TAG, "Expected sys_title_len=8, got %d", payload[1]);
-        return false;
-    }
-
-    const uint8_t *sys_title = payload + 2;  // 8 bytes
-
-    // Parse BER-encoded ciphertext length at payload[10]
-    size_t pos = 10;
-    size_t cipher_total_len;  // includes 16-byte GCM tag
-    if (payload[pos] == 0x82) {
-        cipher_total_len = ((size_t)payload[pos+1] << 8) | payload[pos+2];
-        pos += 3;
-    } else if (payload[pos] == 0x81) {
-        cipher_total_len = payload[pos+1];
-        pos += 2;
-    } else {
-        cipher_total_len = payload[pos];
-        pos += 1;
-    }
-
-    if (pos + 5 + cipher_total_len > payload_len) {
-        ESP_LOGW(TAG, "Payload too short for declared cipher length");
+    if (f1[OFF_CI] != CI_GENERAL_CIPHERING) {
+        ESP_LOGW(TAG, "Bad CI 0x%02x at offset %zu", f1[OFF_CI], OFF_CI);
         return false;
     }
 
-    uint8_t security_control = payload[pos];
-    uint32_t frame_counter = ((uint32_t)payload[pos+1] << 24) |
-                             ((uint32_t)payload[pos+2] << 16) |
-                             ((uint32_t)payload[pos+3] << 8)  |
-                              (uint32_t)payload[pos+4];
-
-    if (frame_counter <= last_frame_counter_) {
-        ESP_LOGW(TAG, "Replay detected: counter %u <= last %u", frame_counter, last_frame_counter_);
-        return false;
-    }
-
-    const uint8_t *ciphertext = payload + pos + 5;
-    size_t ciphertext_len = cipher_total_len - GCM_TAG_LEN;
-    const uint8_t *tag = ciphertext + ciphertext_len;
-
-    // IV = sys_title(8) + frame_counter as big-endian uint32(4)
     uint8_t iv[IV_LEN];
-    memcpy(iv, sys_title, 8);
-    iv[8]  = (frame_counter >> 24) & 0xFF;
-    iv[9]  = (frame_counter >> 16) & 0xFF;
-    iv[10] = (frame_counter >>  8) & 0xFF;
-    iv[11] =  frame_counter        & 0xFF;
+    memcpy(iv,     f1 + OFF_SYS_TITLE, 8);
+    memcpy(iv + 8, f1 + OFF_INV_CTR,   4);
 
-    // AAD = security_control(1) + sys_title(8)
-    uint8_t aad[AAD_LEN];
-    aad[0] = security_control;
-    memcpy(aad + 1, sys_title, 8);
+    uint32_t fc = ((uint32_t)iv[8] << 24) | ((uint32_t)iv[9] << 16)
+                | ((uint32_t)iv[10] << 8) | iv[11];
+    if (fc <= last_frame_counter_) {
+        ESP_LOGW(TAG, "Replay: fc=%u <= last=%u", fc, last_frame_counter_);
+        return false;
+    }
+
+    // Combine ciphertext from both frames (strip CS+stop = last 2 bytes each)
+    static uint8_t ciph[256];
+    size_t len1 = f1_len - OFF_CIPHER_F1 - 2;
+    size_t len2 = (f2 && f2_len > OFF_CIPHER_F2 + 2) ? f2_len - OFF_CIPHER_F2 - 2 : 0;
+    memcpy(ciph,         f1 + OFF_CIPHER_F1, len1);
+    if (len2) memcpy(ciph + len1, f2 + OFF_CIPHER_F2, len2);
+    size_t total = len1 + len2;
 
     mbedtls_gcm_context gcm;
     mbedtls_gcm_init(&gcm);
-    int ret = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, guek_, 128);
-    if (ret != 0) {
-        ESP_LOGE(TAG, "GCM setkey failed: %d", ret);
+    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, guek_, 128) != 0) {
+        ESP_LOGE(TAG, "GCM setkey failed");
         mbedtls_gcm_free(&gcm);
         return false;
     }
-
-    ret = mbedtls_gcm_auth_decrypt(&gcm, ciphertext_len,
-                                   iv, IV_LEN,
-                                   aad, AAD_LEN,
-                                   tag, GCM_TAG_LEN,
-                                   ciphertext, plain_out);
+    // NÖ Netz / Sagemcom T210D: empty AAD, no auth tag appended
+    mbedtls_gcm_starts(&gcm, MBEDTLS_GCM_DECRYPT, iv, IV_LEN, nullptr, 0);
+    mbedtls_gcm_update(&gcm, total, ciph, plain_out);
+    uint8_t dummy_tag[16];
+    mbedtls_gcm_finish(&gcm, dummy_tag, sizeof(dummy_tag));
     mbedtls_gcm_free(&gcm);
 
-    if (ret != 0) {
-        // Retry with empty AAD (some meter variants)
-        mbedtls_gcm_init(&gcm);
-        mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, guek_, 128);
-        ret = mbedtls_gcm_auth_decrypt(&gcm, ciphertext_len,
-                                       iv, IV_LEN,
-                                       nullptr, 0,
-                                       tag, GCM_TAG_LEN,
-                                       ciphertext, plain_out);
-        mbedtls_gcm_free(&gcm);
-        if (ret != 0) {
-            ESP_LOGW(TAG, "AES-GCM auth failed (both AAD variants)");
-            return false;
-        }
-        ESP_LOGD(TAG, "Decrypted with empty AAD");
-    }
-
-    last_frame_counter_ = frame_counter;
-    *plain_len = ciphertext_len;
-    ESP_LOGD(TAG, "Decrypted OK: fc=%u, plain_len=%zu", frame_counter, ciphertext_len);
+    last_frame_counter_ = fc;
+    *plain_len = total;
+    ESP_LOGI(TAG, "Decrypted OK fc=%u plain=%zu", fc, total);
     return true;
 }
 

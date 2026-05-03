@@ -50,6 +50,8 @@ def main() -> None:
             except DecodeError as exc:
                 log.warning("Frame decode error: %s", exc)
                 continue
+            if reading is None:
+                continue  # frame1 buffered, waiting for frame2
             for out in outputs:
                 try:
                     out.publish(reading)

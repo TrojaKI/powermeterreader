@@ -13,9 +13,7 @@ namespace stromzaehler {
 
 static const size_t FRAME_BUFFER_SIZE = 512;
 static const size_t GUEK_LEN = 16;
-static const size_t GCM_TAG_LEN = 16;
-static const size_t IV_LEN = 12;       // 8B sys_title + 4B frame_counter
-static const size_t AAD_LEN = 9;       // 1B security_control + 8B sys_title
+static const size_t IV_LEN = 12;  // 8B sys_title + 4B frame_counter
 static const uint8_t MBUS_START = 0x68;
 static const uint8_t MBUS_STOP = 0x16;
 static const uint8_t CI_GENERAL_CIPHERING = 0xDB;
@@ -68,18 +66,22 @@ class StromzaehlerComponent : public Component, public uart::UARTDevice {
 
  protected:
     bool process_byte(uint8_t byte);           // returns true when full frame ready
-    bool decrypt(const uint8_t *frame, size_t frame_len,
+    bool decrypt(const uint8_t *frame1, size_t frame1_len,
+                 const uint8_t *frame2, size_t frame2_len,
                  uint8_t *plain_out, size_t *plain_len);
     bool parse(const uint8_t *data, size_t len, MeterData &out);
     int32_t find_obis(const uint8_t *data, size_t len, const uint8_t *obis_code);
     void publish_data(const MeterData &d);
 
-    uint8_t guek_[GUEK_LEN]{};
-    uint8_t buf_[FRAME_BUFFER_SIZE]{};
-    size_t  buf_len_{0};
-    bool    synced_{false};         // true after first 0x68 seen
-    uint8_t expected_len_{0};       // M-Bus frame length from header
+    uint8_t  guek_[GUEK_LEN]{};
+    uint8_t  buf_[FRAME_BUFFER_SIZE]{};
+    size_t   buf_len_{0};
+    bool     synced_{false};
+    uint16_t expected_len_{0};       // uint16 to hold frame1 total=256
     uint32_t last_frame_counter_{0};
+    uint8_t  frame1_buf_[256]{};     // buffered first frame
+    size_t   frame1_len_{0};
+    bool     has_frame1_{false};
 
     sensor::Sensor      *s_energy_consumed_{nullptr};
     sensor::Sensor      *s_energy_fed_{nullptr};

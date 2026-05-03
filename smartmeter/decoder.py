@@ -1,16 +1,17 @@
 """
-DLMS/COSEM frame decoder for NÖ Netz Smart Meter P1 interface.
+DLMS/COSEM frame decoder for NÖ Netz Smart Meter P1 interface (Sagemcom T210D).
 
-Frame structure (M-Bus long frame with General Ciphering):
-  68 [L] [L] 68 [C] [A] [CI=0xDB] [System Title len=0x08] [System Title 8B]
-  [ciphertext length 1-2B] [Security Control 1B] [Frame Counter 4B]
-  [AES-128-GCM ciphertext + 12B tag] [CS] 16
+Frame structure (validated vs github.com/FKW9/esp-smartmeter-netznoe):
+  Frame1 (256B): 68 FA FA 68 53 FF 00 01 67 DB 08 [sys_title 8B]
+                 81 F8 [sec_ctrl] [inv_ctr 4B] [ciphertext 228B] CS 16
+  Frame2  (26B): 68 14 14 68 53 FF 11 01 67 [ciphertext 15B] CS 16
+  AES-128-GCM, empty AAD, no auth-tag.
 """
 import logging
 import struct
 from datetime import datetime, timezone, timedelta
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from smartmeter.models import MeterReading
 
@@ -36,64 +37,55 @@ TAG_OCTET_STRING = 0x09
 TAG_DOUBLE_LONG_UNSIGNED = 0x06  # UInt32
 TAG_LONG_UNSIGNED = 0x12         # UInt16
 
+# Fixed frame offsets (absolute from frame start, Sagemcom T210D)
+_OFF_CI        =  9   # CI=0xDB General Ciphering
+_OFF_SYS_TITLE = 11   # sys_title (8 bytes)
+_OFF_INV_CTR   = 22   # frame counter (4 bytes, big-endian)
+_OFF_CIPHER_F1 = 26   # ciphertext start in frame1
+_OFF_CIPHER_F2 =  9   # ciphertext start in frame2
+
 
 class DecodeError(Exception):
     pass
 
 
-def decrypt_frame(raw: bytes, guek: bytes) -> bytes:
-    """Decrypt a raw M-Bus frame and return the plaintext DLMS APDU bytes."""
-    # M-Bus frame: 68 L L 68 C A [payload] CS 16
-    # payload starts at index 6 (after 68 L L 68 C A)
-    if len(raw) < 10 or raw[0] != 0x68 or raw[-1] != 0x16:
-        raise DecodeError("Not a valid M-Bus frame")
+_last_fc: int = 0
+_frame1_pending: bytes | None = None
 
-    payload = raw[6:-2]  # strip header and CS+stop
 
-    # General Ciphering header: CI=0xDB, system title length, system title
-    if payload[0] != 0xDB:
-        raise DecodeError(f"Expected CI=0xDB, got 0x{payload[0]:02x}")
+def _aes_gcm_decrypt_no_tag(key: bytes, iv: bytes, ciphertext: bytes) -> bytes:
+    # GCM data blocks = CTR starting at J0+1 where J0 = nonce||0x00000001 (12B nonce)
+    counter = iv + b'\x00\x00\x00\x02'
+    dec = Cipher(algorithms.AES(key), modes.CTR(counter)).decryptor()
+    return dec.update(ciphertext) + dec.finalize()
 
-    sys_title_len = payload[1]
-    if sys_title_len != 8:
-        raise DecodeError(f"Expected system title length 8, got {sys_title_len}")
 
-    sys_title = payload[2:10]
+def decrypt_frame(raw: bytes, guek: bytes, frame2: bytes | None = None) -> bytes:
+    """Decrypt a Sagemcom T210D two-frame M-Bus sequence; frame2 is the 26B continuation."""
+    global _last_fc
 
-    # Ciphertext length (may be 1 or 2 bytes: if first byte is 0x81, next byte is length)
-    pos = 10
-    if payload[pos] == 0x81:
-        pos += 1
-        cipher_len = payload[pos]
-        pos += 1
-    elif payload[pos] == 0x82:
-        cipher_len = struct.unpack_from(">H", payload, pos + 1)[0]
-        pos += 3
+    if len(raw) < _OFF_CIPHER_F1 + 2 or raw[0] != 0x68 or raw[-1] != 0x16:
+        raise DecodeError(f"Invalid frame1 ({len(raw)}B)")
+    if raw[_OFF_CI] != 0xDB:
+        raise DecodeError(f"Expected CI=0xDB at offset {_OFF_CI}, got 0x{raw[_OFF_CI]:02x}")
+
+    iv = raw[_OFF_SYS_TITLE:_OFF_SYS_TITLE + 8] + raw[_OFF_INV_CTR:_OFF_INV_CTR + 4]
+    fc = struct.unpack_from(">I", iv, 8)[0]
+    if fc <= _last_fc:
+        raise DecodeError(f"Replay detected: fc={fc} <= last={_last_fc}")
+
+    # Combine ciphertext from both frames (strip CS+stop = last 2 bytes each)
+    cipher1 = raw[_OFF_CIPHER_F1:-2]
+    if frame2 is not None:
+        if len(frame2) < _OFF_CIPHER_F2 + 2:
+            raise DecodeError(f"Frame2 too short ({len(frame2)}B)")
+        cipher2 = frame2[_OFF_CIPHER_F2:-2]
     else:
-        cipher_len = payload[pos]
-        pos += 1
+        cipher2 = b""
 
-    security_control = payload[pos]
-    frame_counter = struct.unpack_from(">I", payload, pos + 1)[0]
-    ciphertext_with_tag = payload[pos + 5: pos + cipher_len]
-
-    iv = sys_title + struct.pack(">I", frame_counter)
-    aad = bytes([security_control]) + sys_title
-
-    try:
-        aesgcm = AESGCM(guek)
-        plaintext = aesgcm.decrypt(iv, ciphertext_with_tag, aad)
-    except Exception as exc:
-        # Try with empty AAD (some meter variants)
-        try:
-            plaintext = aesgcm.decrypt(iv, ciphertext_with_tag, b"")
-        except Exception:
-            raise DecodeError(f"AES-GCM decryption failed: {exc}") from exc
-
-    log.debug(
-        "Decrypted frame: sys_title=%s frame_counter=%d plaintext_len=%d",
-        sys_title.hex(), frame_counter, len(plaintext),
-    )
+    plaintext = _aes_gcm_decrypt_no_tag(guek, iv, cipher1 + cipher2)
+    _last_fc = fc
+    log.debug("Decrypted: fc=%d plain=%dB", fc, len(plaintext))
     return plaintext
 
 
@@ -207,7 +199,22 @@ def _parse_meter_id(data: bytes) -> str:
     return "unknown"
 
 
-def decode_frame(raw: bytes, guek: bytes) -> MeterReading:
-    """Full pipeline: decrypt + parse a raw M-Bus frame."""
-    plaintext = decrypt_frame(raw, guek)
-    return parse_apdu(plaintext)
+def decode_frame(raw: bytes, guek: bytes) -> MeterReading | None:
+    """
+    Stateful decode: buffers the 256B frame1, decrypts on receipt of the 26B frame2.
+    Returns None when frame1 is buffered (awaiting frame2).
+    """
+    global _frame1_pending
+
+    if len(raw) == 256:
+        _frame1_pending = raw
+        log.debug("Frame1 buffered — waiting for frame2")
+        return None
+
+    if len(raw) == 26 and _frame1_pending is not None:
+        f1 = _frame1_pending
+        _frame1_pending = None
+        return parse_apdu(decrypt_frame(f1, guek, frame2=raw))
+
+    _frame1_pending = None
+    raise DecodeError(f"Unexpected frame length {len(raw)}B (expected 256 then 26)")
