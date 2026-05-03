@@ -5,7 +5,7 @@ Python daemon that reads, decrypts, and forwards data from the NÖ Netz Smart Me
 ## Requirements
 
 - M-Bus to USB/Serial adapter (RJ12 → USB)
-- GUEK encryption key (16 bytes, obtained from Netz NÖ via postal mail)
+- GUEK encryption key (16 bytes, obtained from Netz NÖ via online form [Kundenschnittstelle Aktivieren[(https://netz-noe.at/services/kundenschnittstelle-aktivieren))
 - Python 3.11+
 
 ## Setup
