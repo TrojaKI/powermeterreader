@@ -9,7 +9,8 @@ class MqttHa {
     explicit MqttHa(WiFiClient &wc);
     void begin(const char *broker, uint16_t port, const char *client_id,
                const char *user = "", const char *pass = "");
-    void loop();                  // call every loop() iteration
+    void loop();
+    bool connected() { return _client.connected(); }
     void publish(const MeterData &d);
     void publish_debug(const char *msg);  // → stromzaehler/debug (not retained)
     void publish_hex(const char *subtopic, const uint8_t *data, size_t len);  // → stromzaehler/<subtopic>

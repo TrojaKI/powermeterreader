@@ -3,14 +3,22 @@
 #include "dlms.h"
 #include <WiFiNINA.h>
 
+struct SysStats {
+    uint32_t rx_bytes   = 0;
+    uint32_t rx_frames  = 0;
+    uint32_t t_last_pub = 0;  // millis() of last MQTT publish, 0=never
+    bool     mqtt_ok    = false;
+};
+
 class WebServer {
  public:
     void begin();
-    void handle(const MeterData &d);  // call every loop(); caches last reading
+    void handle(const MeterData &d, const SysStats &s);
 
  private:
     WiFiServer _server{80};
     MeterData  _last{};
+    SysStats   _stats{};
 
     void serve_status(WiFiClient &c);
     void serve_update_form(WiFiClient &c);

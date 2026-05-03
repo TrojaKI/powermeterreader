@@ -9,8 +9,9 @@ void WebServer::begin() {
     _server.begin();
 }
 
-void WebServer::handle(const MeterData &d) {
-    _last = d;
+void WebServer::handle(const MeterData &d, const SysStats &s) {
+    _last  = d;
+    _stats = s;
 
     WiFiClient c = _server.available();
     if (!c) return;
@@ -106,6 +107,29 @@ void WebServer::serve_status(WiFiClient &c) {
     c.print("<tr><th>Z\xC3\xA4hlernummer</th><td>");
     c.print(_last.meter_serial[0] ? _last.meter_serial : "-");
     c.print("</td></tr></table>");
+
+    // diagnostic panel
+    c.print("<h3 style='margin-top:1.5em'>Diagnose</h3><table>");
+    {
+        char _b[32];
+        snprintf(_b, sizeof(_b), "%lu", (unsigned long)_stats.rx_bytes);
+        c.print("<tr><th>M-Bus Bytes</th><td>"); c.print(_b); c.print("</td></tr>");
+        snprintf(_b, sizeof(_b), "%lu", (unsigned long)_stats.rx_frames);
+        c.print("<tr><th>M-Bus Frames</th><td>"); c.print(_b); c.print("</td></tr>");
+        c.print("<tr><th>MQTT</th><td>");
+        c.print(_stats.mqtt_ok ? "verbunden" : "getrennt");
+        c.print("</td></tr>");
+        if (_stats.t_last_pub > 0) {
+            uint32_t ago = (millis() - _stats.t_last_pub) / 1000;
+            snprintf(_b, sizeof(_b), "vor %lus", (unsigned long)ago);
+            c.print("<tr><th>Letzter Publish</th><td>"); c.print(_b); c.print("</td></tr>");
+        } else {
+            c.print("<tr><th>Letzter Publish</th><td>-</td></tr>");
+        }
+        snprintf(_b, sizeof(_b), "%lus", (unsigned long)(millis() / 1000));
+        c.print("<tr><th>Uptime</th><td>"); c.print(_b); c.print("</td></tr>");
+    }
+    c.print("</table>");
     c.print("<p style='color:#888;font-size:0.85em;margin-top:0.5em'>"
             "Firmware " FW_VERSION "</p>");
     c.print("<a href='/update'>Firmware Update</a>");

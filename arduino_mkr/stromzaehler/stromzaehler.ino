@@ -42,27 +42,27 @@ void setup() {
     Serial.print("Web: http://"); Serial.println(WiFi.localIP());
 }
 
+static MeterData last_data{};
+static SysStats  sys_stats{};
+
 void loop() {
     wifi_connect();
     mqttHa.loop();
+    sys_stats.mqtt_ok = mqttHa.connected();
 
-    static MeterData last_data{};
     static uint8_t   plain[256];
     static uint8_t   frame1_buf[256];
     static size_t    frame1_len    = 0;
     static bool      has_frame1    = false;
-    static uint32_t  rx_bytes      = 0;
-    static uint32_t  rx_frames     = 0;
     static uint32_t  t_report      = 0;
-    static uint32_t  t_last_pub    = 0;
 
     while (Serial1.available()) {
         uint8_t b = (uint8_t)Serial1.read();
-        rx_bytes++;
+        sys_stats.rx_bytes++;
         if (!mbus_process_byte(b)) continue;
 
         size_t flen = mbus_frame_len();
-        rx_frames++;
+        sys_stats.rx_frames++;
 
         Serial.print("MBUS "); Serial.print(flen); Serial.print("B: ");
         for (size_t i = 0; i < min(flen, (size_t)12); i++) {
@@ -90,7 +90,7 @@ void loop() {
             hex12(frame1_buf,    12, h1);
             hex12(mbus_frame(), 12, h2);
 
-            bool do_publish = (millis() - t_last_pub >= PUBLISH_INTERVAL_MS);
+            bool do_publish = (millis() - sys_stats.t_last_pub >= PUBLISH_INTERVAL_MS);
 
             if (dlms_decrypt(frame1_buf, frame1_len,
                              mbus_frame(), flen,
@@ -101,7 +101,7 @@ void loop() {
                     if (do_publish) {
                         mqttHa.publish(data);
                         mqttHa.publish_hex("debug/plain", plain, plain_len);
-                        t_last_pub = millis();
+                        sys_stats.t_last_pub = millis();
                     }
                     snprintf(dbg, sizeof(dbg), "OK P+:%luW E:%.3fkWh U1:%.1fV f1:%s f2:%s",
                              (unsigned long)data.power_active_w,
@@ -126,10 +126,10 @@ void loop() {
     }
 
     if (millis() - t_report > 10000) {
-        Serial.print("rx="); Serial.print(rx_bytes);
-        Serial.print(" frames="); Serial.println(rx_frames);
+        Serial.print("rx="); Serial.print(sys_stats.rx_bytes);
+        Serial.print(" frames="); Serial.println(sys_stats.rx_frames);
         t_report = millis();
     }
 
-    webServer.handle(last_data);
+    webServer.handle(last_data, sys_stats);
 }
