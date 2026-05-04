@@ -581,7 +581,7 @@
           },
           "fieldMinMax": false,
           "mappings": [],
-          "max": 1200,
+          "max": 3000,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -959,6 +959,18 @@
               {
                 "id": "min",
                 "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Stunde"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 102
               }
             ]
           }
@@ -1565,29 +1577,16 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 5,
+            "fillOpacity": 80,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -1619,19 +1618,26 @@
       },
       "id": 8,
       "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
         "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
         "tooltip": {
           "hideZeros": false,
           "mode": "single",
           "sort": "none"
-        }
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
       },
       "pluginVersion": "12.3.0",
       "targets": [
@@ -1644,7 +1650,7 @@
           "groupBy": [
             {
               "params": [
-                "$__interval"
+                "1d"
               ],
               "type": "time"
             },
@@ -1687,8 +1693,8 @@
           ]
         }
       ],
-      "title": "Energie Bezug",
-      "type": "timeseries"
+      "title": "Energie Bezug pro Tag",
+      "type": "barchart"
     },
     {
       "datasource": {
@@ -1844,12 +1850,12 @@
     "list": []
   },
   "time": {
-    "from": "now-2d",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "NÖ Netz Stromzähler T210D",
   "uid": "stromzaehler_t210d",
-  "version": 9
+  "version": 12
 }
