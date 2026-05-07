@@ -205,12 +205,17 @@ def main() -> None:
         decode_apdu(data)
         return
 
-    client = mqtt.Client(userdata={"once": args.once})
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, userdata={"once": args.once})
     client.on_message = on_message
     client.connect(args.broker, args.port, keepalive=60)
     client.subscribe(args.topic)
     print(f"Listening on {args.broker}:{args.port} topic={args.topic} ...")
-    client.loop_forever()
+    try:
+        client.loop_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        client.disconnect()
 
 
 if __name__ == "__main__":
