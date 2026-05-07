@@ -1,14 +1,38 @@
-# Smart Meter P1 Reader
+# Smart Meter P1 Reader — NÖ Netz
 
-Python daemon that reads, decrypts, and forwards data from the NÖ Netz Smart Meter P1 customer interface (Kundenschnittstelle).
+Reads, decrypts, and forwards data from the **NÖ Netz Smart Meter P1 customer interface** (Kundenschnittstelle). The meter (Sagemcom T210D / S210) transmits encrypted DLMS/COSEM frames every 5 seconds via wired M-Bus.
 
-## Requirements
+## Implementations
 
-- M-Bus to USB/Serial adapter (RJ12 → USB)
-- GUEK encryption key (16 bytes, obtained from Netz NÖ via online form [Kundenschnittstelle Aktivieren](https://netz-noe.at/services/kundenschnittstelle-aktivieren))
+Three variants exist — pick the one that fits your setup:
+
+| Variant | Hardware needed | Requires PC | Home Assistant |
+|---------|----------------|-------------|----------------|
+| [Python (MBUS2USB)](#python-tool) | M-Bus → USB adapter + RJ12 cable | yes | via MQTT |
+| [Arduino MKR WIFI 1010](arduino_mkr/README.md) | MKR board + MBUS Slave Shield + RJ12 | no (standalone) | MQTT auto-discovery |
+| [ESP32 / ESPHome](esp32/README.md) | ESP32 dev board + M-Bus interface + RJ12 | no (standalone) | ESPHome native — ⚠️ experimental |
+
+## Common Prerequisites
+
+**GUEK encryption key** — 16 bytes (32 hex chars), issued by Netz NÖ per postal mail.
+Request at: [netz-noe.at/services/kundenschnittstelle-aktivieren](https://netz-noe.at/services/kundenschnittstelle-aktivieren)
+
+**Physical connection** — RJ12 cable from meter to your hardware:
+- Pin 3 → MBUS+ (positive)
+- Pin 4 → MBUS− (negative)
+
+---
+
+## Python Tool
+
+A daemon that reads frames via an M-Bus→USB adapter and outputs to JSON, MQTT, and/or InfluxDB.
+
+### Requirements
+
 - Python 3.11+
+- M-Bus to USB/Serial adapter (RJ12 → USB), e.g. Relay MBUS-USB
 
-## Setup
+### Setup
 
 ```bash
 python -m venv venv
@@ -18,81 +42,52 @@ cp .env.example .env
 # Edit .env: set SERIAL_PORT and GUEK
 ```
 
-## Run
+### Run
 
 ```bash
 python main.py
 ```
 
-## Configuration
+### Configuration
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SERIAL_PORT` | yes | Serial device, e.g. `/dev/ttyUSB0` |
-| `GUEK` | yes | 32 hex chars (AES-128 key from Netz NÖ) |
-| `MQTT_HOST` | no | MQTT broker hostname |
-| `MQTT_PORT` | no | MQTT broker port (default: 1883) |
-| `MQTT_TOPIC_PREFIX` | no | Topic prefix (default: `smartmeter`) |
-| `INFLUX_URL` | no | InfluxDB 2.x URL |
-| `INFLUX_TOKEN` | no | InfluxDB API token |
-| `INFLUX_ORG` | no | InfluxDB organisation |
-| `INFLUX_BUCKET` | no | InfluxDB bucket |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SERIAL_PORT` | yes | — | Serial device, e.g. `/dev/ttyUSB0` |
+| `GUEK` | yes | — | 32 hex chars (AES-128 key from Netz NÖ) |
+| `MQTT_HOST` | no | — | MQTT broker hostname |
+| `MQTT_PORT` | no | `1883` | MQTT broker port |
+| `MQTT_TOPIC_PREFIX` | no | `smartmeter` | Topic prefix |
+| `INFLUX_URL` | no | — | InfluxDB 2.x URL |
+| `INFLUX_TOKEN` | no | — | InfluxDB API token |
+| `INFLUX_ORG` | no | — | InfluxDB organisation |
+| `INFLUX_BUCKET` | no | — | InfluxDB bucket |
 
-## Output
+### MQTT Output
 
-The meter sends a frame every 5 seconds. Each frame is logged as JSON and optionally published to MQTT and InfluxDB.
+| Topic | Retained | Content |
+|-------|----------|---------|
+| `smartmeter/tele` | no | Full JSON payload (all fields + timestamp) |
+| `smartmeter/<field>` | yes | Individual sensor value |
 
-MQTT topics:
-- `smartmeter/tele` — full JSON payload
-- `smartmeter/<field>` — individual retained values
+Fields: `energy_consumed_wh`, `energy_fed_wh`, `power_active_w`, `power_reactive_w`, `voltage_l1/l2/l3`, `current_l1/l2/l3`, `power_factor`, `meter_serial`
 
-## Tests
+### Tests
 
 ```bash
 pytest tests/ -v
 ```
 
-## Arduino MKR WIFI 1010
+### Debug Tool
 
-Standalone embedded variant — runs 24/7 in the meter cabinet with direct Home Assistant integration, no PC required.
+`tools/apdu_decoder.py` — subscribes to raw MQTT hex frames and decodes them offline. Useful for protocol debugging without physical hardware.
 
-### Hardware Required
+---
 
-- Arduino MKR WIFI 1010
-- [Arduino MKR MBUS Slave Shield](https://www.hwhardsoft.de/deutsch/projekte/m-bus-mkr-shield/) (HW Hardsoft) — steckt direkt auf den MKR, TSS721A galvanisch isoliert
-- RJ12 cable (pin 3 = MBUS+, pin 4 = MBUS–) → Shield M-Bus screw terminals
-- USB-C 5V power supply for the MKR (shield is powered from the M-Bus line)
+## Protocol Reference
 
-### Setup
+- Physical: RJ12, M-Bus, 2400 baud, 8E1
+- Protocol: DLMS/COSEM (Green Book Ed. 9+, Interface Classes Book Ed. 14+)
+- Encryption: AES-128-GCM (DLMS Security Suite 0), IV = System Title (8 B) + Frame Counter (4 B)
+- The Sagemcom T210D splits one DLMS PDU across **two** M-Bus frames (256 B + 26 B)
 
-1. Install [Arduino IDE 2.x](https://www.arduino.cc/en/software)
-2. Tools → Board Manager → search `Arduino SAMD` → install
-3. Install libraries (Tools → Manage Libraries):
-   `WiFiNINA`, `PubSubClient`, `Crypto` (by Rhys Weatherley), `ArduinoOTA`
-4. Copy config:
-   ```bash
-   cp arduino_mkr/stromzaehler/config.h.example arduino_mkr/stromzaehler/config.h
-   ```
-5. Edit `config.h` — set WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, GUEK_HEX (32 hex chars from Netz NÖ), OTA_PASSWORD
-6. Open `arduino_mkr/stromzaehler/stromzaehler.ino` in Arduino IDE
-7. Select board: Tools → Board → Arduino SAMD Boards → **Arduino MKR WIFI 1010**
-8. Upload via USB
-
-### Home Assistant
-
-Sensors appear automatically via MQTT discovery — no manual configuration needed.
-Requires MQTT integration enabled in HA with the broker address set in `config.h`.
-
-### OTA Updates
-
-After first USB flash, subsequent updates via WiFi:
-Tools → Port → select network port → Upload.
-Password: `OTA_PASSWORD` from `config.h`.
-
-## Protocol
-
-NÖ Netz Smart Meter P1 interface (Kundenschnittstelle):
-- Physical: RJ12, M-Bus, 2400 baud
-- Protocol: DLMS/COSEM (Green Book Ed. 9+)
-- Encryption: AES-128-GCM (DLMS Security Suite 0)
-- Reference: [docs/](docs/)
+Reference documents: [`docs/`](docs/)
