@@ -783,8 +783,7 @@
                 "value": 0
               },
               {
-                "id": "max",
-                "value": 30
+                "id": "max"
               }
             ]
           }
@@ -1047,7 +1046,7 @@
         }
       ],
       "timeFrom": "1d",
-      "title": "Leistungsbezug pro Stunde",
+      "title": "Leistung Bezug pro Stunde",
       "transformations": [
         {
           "id": "sortBy",
@@ -1803,7 +1802,7 @@
             },
             {
               "params": [
-                "null"
+                "linear"
               ],
               "type": "fill"
             }
@@ -1857,5 +1856,5 @@
   "timezone": "browser",
   "title": "NÖ Netz Stromzähler T210D",
   "uid": "stromzaehler_t210d",
-  "version": 12
+  "version": 15
 }
